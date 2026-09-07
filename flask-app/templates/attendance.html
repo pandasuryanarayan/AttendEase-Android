@@ -1,0 +1,201 @@
+<!-- templates/attendance.html -->
+{% extends 'base.html' %}
+{% block title %}{{ 'Attendance Records' if is_admin else 'My Attendance History' }}{% endblock %}
+{% block page_title %}{{ 'Attendance Records' if is_admin else 'My Attendance History' }}{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div>
+    <h2>{{ 'All Attendance Records' if is_admin else 'My Attendance History' }}</h2>
+    <p class="subtitle">{{ records.total }} record{{ 's' if records.total != 1 }} found</p>
+  </div>
+</div>
+
+<!-- Filters -->
+<div class="filter-bar">
+  <form method="GET" class="filter-form flex-wrap">
+    {% if is_admin %}
+    <div class="filter-group">
+      <select name="employee" class="form-input">
+        <option value="">All Employees</option>
+        {% for emp in employees %}
+          <option value="{{ emp.id }}" {% if emp_id|string == emp.id|string %}selected{% endif %}>
+            {{ emp.full_name }}
+          </option>
+        {% endfor %}
+      </select>
+    </div>
+    {% endif %}
+    <div class="filter-group">
+      <input type="date" name="start_date" class="form-input"
+             value="{{ start_str }}" placeholder="From" />
+    </div>
+    <div class="filter-group">
+      <input type="date" name="end_date" class="form-input"
+             value="{{ end_str }}" placeholder="To" />
+    </div>
+    {% if is_admin %}
+    <div class="filter-group">
+      <select name="status" class="form-input">
+        <option value="">All Statuses</option>
+        <option value="present" {% if status_filter=='present' %}selected{% endif %}>Present</option>
+        <option value="late" {% if status_filter=='late' %}selected{% endif %}>Late</option>
+        <option value="absent" {% if status_filter=='absent' %}selected{% endif %}>Absent</option>
+      </select>
+    </div>
+    {% else %}
+    <div class="filter-group">
+      <select name="month" class="form-input">
+        {% for m in range(1, 13) %}
+          <option value="{{ m }}" {% if m == month %}selected{% endif %}>
+            {{ ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][m-1] }}
+          </option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="filter-group">
+      <input type="number" name="year" class="form-input" value="{{ year }}" min="2020" max="2030" style="width:90px" />
+    </div>
+    {% endif %}
+    <button type="submit" class="btn btn-secondary">Apply</button>
+    <a href="{{ url_for('admin_attendance' if is_admin else 'attendance_history') }}" class="btn btn-ghost">Clear</a>
+  </form>
+</div>
+
+<!-- Table -->
+<div class="card">
+  <div class="card-body p-0">
+    {% if records.items %}
+    <div class="table-responsive">
+      <table class="table">
+        <thead>
+          <tr>
+            {% if is_admin %}<th>Employee</th>{% endif %}
+            <th>Date</th>
+            <th>Check In</th>
+            <th>Check Out</th>
+            <th>Hours</th>
+            <th>Status</th>
+            {% if is_admin %}<th>Actions</th>{% endif %}
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in records.items %}
+            {% if is_admin %}
+              {% set att = row[0] %}
+              {% set emp = row[1] %}
+            {% else %}
+              {% set att = row %}
+            {% endif %}
+          <tr>
+            {% if is_admin %}
+            <td>
+              <div class="emp-cell">
+                <div class="avatar-sm">{{ emp.first_name[0] }}</div>
+                <div>
+                  <div class="fw-600">{{ emp.full_name }}</div>
+                  <div class="text-muted text-sm">{{ emp.department or '' }}</div>
+                </div>
+              </div>
+            </td>
+            {% endif %}
+            <td>{{ att.date.strftime('%b %d, %Y') }}</td>
+            <td>{{ att.check_in_str }}</td>
+            <td>{{ att.check_out_str }}</td>
+            <td>{{ att.hours_worked or '—' }}</td>
+            <td><span class="badge {{ att.status_badge }}">{{ att.status | title }}</span></td>
+            {% if is_admin %}
+            <td>
+              <button class="btn btn-sm btn-ghost"
+                      onclick="openEditModal({{ att.id }},
+                        '{{ att.check_in.strftime('%Y-%m-%dT%H:%M') if att.check_in else '' }}',
+                        '{{ att.check_out.strftime('%Y-%m-%dT%H:%M') if att.check_out else '' }}',
+                        '{{ att.status }}')">
+                Edit
+              </button>
+            </td>
+            {% endif %}
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Pagination -->
+    {% if records.pages > 1 %}
+    <div class="pagination">
+      {% if records.has_prev %}
+        <a href="{{ url_for(request.endpoint, page=records.prev_num, employee=emp_id, start_date=start_str, end_date=end_str, status=status_filter, month=month, year=year) }}" class="page-btn">← Prev</a>
+      {% endif %}
+      <span class="page-info">Page {{ records.page }} of {{ records.pages }}</span>
+      {% if records.has_next %}
+        <a href="{{ url_for(request.endpoint, page=records.next_num, employee=emp_id, start_date=start_str, end_date=end_str, status=status_filter, month=month, year=year) }}" class="page-btn">Next →</a>
+      {% endif %}
+    </div>
+    {% endif %}
+
+    {% else %}
+    <div class="empty-state large">
+      <svg viewBox="0 0 24 24" width="64" height="64"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M8 2v4M16 2v4M3 10h18"/><path d="M9 16l2 2 4-4"/></svg>
+      <h3>No records found</h3>
+      <p>Try adjusting your filter criteria.</p>
+    </div>
+    {% endif %}
+  </div>
+</div>
+
+<!-- Edit Modal (Admin only) -->
+{% if is_admin %}
+<div class="modal-overlay" id="editModal" style="display:none">
+  <div class="modal">
+    <div class="modal-header">
+      <h3>Edit Attendance Record</h3>
+      <button onclick="closeModal()" class="modal-close">×</button>
+    </div>
+    <form method="POST" id="editForm">
+      <div class="modal-body">
+        <div class="form-row">
+          <div class="form-group">
+            <label>Check In Time</label>
+            <input type="datetime-local" name="check_in" id="edit_checkin" />
+          </div>
+          <div class="form-group">
+            <label>Check Out Time</label>
+            <input type="datetime-local" name="check_out" id="edit_checkout" />
+          </div>
+        </div>
+        <div class="form-group">
+          <label>Status</label>
+          <select name="status" id="edit_status">
+            <option value="present">Present</option>
+            <option value="late">Late</option>
+            <option value="absent">Absent</option>
+            <option value="leave">Leave</option>
+          </select>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" onclick="closeModal()" class="btn btn-ghost">Cancel</button>
+        <button type="submit" class="btn btn-primary">Save Changes</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script>
+function openEditModal(id, checkIn, checkOut, status) {
+  document.getElementById('editForm').action = '/admin/attendance/' + id + '/edit';
+  document.getElementById('edit_checkin').value = checkIn;
+  document.getElementById('edit_checkout').value = checkOut;
+  document.getElementById('edit_status').value = status;
+  document.getElementById('editModal').style.display = 'flex';
+}
+function closeModal() {
+  document.getElementById('editModal').style.display = 'none';
+}
+document.getElementById('editModal').addEventListener('click', function(e) {
+  if (e.target === this) closeModal();
+});
+</script>
+{% endif %}
+{% endblock %}

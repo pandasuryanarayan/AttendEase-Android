@@ -1,0 +1,161 @@
+<!-- templates/reports.html -->
+{% extends 'base.html' %}
+{% block title %}Analytics & Reports{% endblock %}
+{% block page_title %}Analytics & Reports{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div>
+    <h2>Monthly Attendance Report</h2>
+    <p class="subtitle">{{ first_day.strftime('%B %Y') }} — {{ working_days }} working days</p>
+  </div>
+  <button class="btn btn-secondary" onclick="window.print()">
+    <svg viewBox="0 0 24 24" width="16" height="16"><polyline points="6,9 6,2 18,2 18,9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
+    Print Report
+  </button>
+</div>
+
+<!-- Month Picker -->
+<div class="filter-bar">
+  <form method="GET" class="filter-form">
+    <div class="filter-group">
+      <select name="month" class="form-input">
+        {% for m in range(1, 13) %}
+          <option value="{{ m }}" {% if m == month %}selected{% endif %}>
+            {{ ['January','February','March','April','May','June',
+                'July','August','September','October','November','December'][m-1] }}
+          </option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="filter-group">
+      <input type="number" name="year" class="form-input" value="{{ year }}"
+             min="2020" max="2030" style="width:100px" />
+    </div>
+    <button type="submit" class="btn btn-primary">Generate</button>
+  </form>
+</div>
+
+{% if report_data %}
+<!-- Summary Cards -->
+{% set total_present = report_data | sum(attribute='present') %}
+{% set total_absent = report_data | sum(attribute='absent') %}
+{% set total_hours_all = report_data | sum(attribute='total_hours') %}
+{% set avg_rate = (report_data | sum(attribute='attendance_rate') / report_data | length) | round(1) %}
+
+<div class="stats-grid stats-grid-4" style="margin-bottom: 24px;">
+  <div class="stat-card stat-blue">
+    <div class="stat-icon"><svg viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg></div>
+    <div class="stat-info">
+      <span class="stat-value">{{ report_data | length }}</span>
+      <span class="stat-label">Employees</span>
+    </div>
+  </div>
+  <div class="stat-card stat-green">
+    <div class="stat-icon"><svg viewBox="0 0 24 24"><polyline points="22,12 18,12 15,21 9,3 6,12 2,12"/></svg></div>
+    <div class="stat-info">
+      <span class="stat-value">{{ avg_rate }}%</span>
+      <span class="stat-label">Avg. Attendance</span>
+    </div>
+  </div>
+  <div class="stat-card stat-purple">
+    <div class="stat-icon"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12,6 12,12 16,14"/></svg></div>
+    <div class="stat-info">
+      <span class="stat-value">{{ total_hours_all | round(0) | int }}h</span>
+      <span class="stat-label">Total Hours</span>
+    </div>
+  </div>
+  <div class="stat-card stat-red">
+    <div class="stat-icon"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg></div>
+    <div class="stat-info">
+      <span class="stat-value">{{ total_absent }}</span>
+      <span class="stat-label">Total Absences</span>
+    </div>
+  </div>
+</div>
+
+<!-- Detailed Table -->
+<div class="card">
+  <div class="card-header">
+    <h3>Employee Breakdown — {{ first_day.strftime('%B %Y') }}</h3>
+  </div>
+  <div class="card-body p-0">
+    <div class="table-responsive">
+      <table class="table">
+        <thead>
+          <tr>
+            <th>Employee</th>
+            <th>Department</th>
+            <th class="text-center">Present</th>
+            <th class="text-center">Absent</th>
+            <th class="text-center">Late</th>
+            <th class="text-center">Leaves</th>
+            <th>Total Hours</th>
+            <th>Attendance %</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in report_data | sort(attribute='attendance_rate', reverse=True) %}
+          <tr>
+            <td>
+              <div class="emp-cell">
+                <div class="avatar-sm">{{ row.employee.first_name[0] }}</div>
+                <div>
+                  <div class="fw-600">{{ row.employee.full_name }}</div>
+                  <div class="text-muted text-sm">{{ row.employee.position or '' }}</div>
+                </div>
+              </div>
+            </td>
+            <td>{{ row.employee.department or '—' }}</td>
+            <td class="text-center">{{ row.present }}</td>
+            <td class="text-center">
+              <span {% if row.absent > 3 %}class="text-danger fw-600"{% endif %}>
+                {{ row.absent }}
+              </span>
+            </td>
+            <td class="text-center">
+              <span {% if row.late > 2 %}class="text-warning fw-600"{% endif %}>
+                {{ row.late }}
+              </span>
+            </td>
+            <td class="text-center">{{ row.leaves }}</td>
+            <td>{{ row.total_hours }}h</td>
+            <td>
+              <div class="progress-cell">
+                <div class="progress-bar-wrap">
+                  <div class="progress-fill
+                    {% if row.attendance_rate >= 90 %}fill-green
+                    {% elif row.attendance_rate >= 75 %}fill-yellow
+                    {% else %}fill-red{% endif %}"
+                    style="width:{{ [100, row.attendance_rate] | min }}%"></div>
+                </div>
+                <span class="progress-label">{{ row.attendance_rate }}%</span>
+              </div>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+        <tfoot>
+          <tr class="table-footer">
+            <td colspan="2"><strong>Totals</strong></td>
+            <td class="text-center"><strong>{{ total_present }}</strong></td>
+            <td class="text-center"><strong>{{ total_absent }}</strong></td>
+            <td class="text-center"></td>
+            <td class="text-center"></td>
+            <td><strong>{{ total_hours_all | round(1) }}h</strong></td>
+            <td><strong>{{ avg_rate }}%</strong></td>
+          </tr>
+        </tfoot>
+      </table>
+    </div>
+  </div>
+</div>
+
+{% else %}
+<div class="empty-state large card">
+  <svg viewBox="0 0 24 24" width="64" height="64"><polyline points="22,12 18,12 15,21 9,3 6,12 2,12"/></svg>
+  <h3>No data available</h3>
+  <p>No employees or attendance records found for this period.</p>
+</div>
+{% endif %}
+{% endblock %}

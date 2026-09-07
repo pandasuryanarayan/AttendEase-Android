@@ -1,0 +1,201 @@
+<!-- templates/leaves.html -->
+{% extends 'base.html' %}
+{% block title %}{{ 'Leave Management' if is_admin else 'My Leave Requests' }}{% endblock %}
+{% block page_title %}{{ 'Leave Management' if is_admin else 'My Leave Requests' }}{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div>
+    <h2>{{ 'Leave Management' if is_admin else 'My Leave Requests' }}</h2>
+    <p class="subtitle">{{ 'Manage all employee leave requests' if is_admin else 'Track and submit your leave requests' }}</p>
+  </div>
+  {% if not is_admin %}
+    <button class="btn btn-primary" onclick="document.getElementById('leaveModal').style.display='flex'">
+      <svg viewBox="0 0 24 24" width="16" height="16"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+      New Request
+    </button>
+  {% endif %}
+</div>
+
+{% if is_admin %}
+<!-- Admin Filter Tabs -->
+<div class="tab-bar">
+  {% for s in ['pending', 'approved', 'rejected', ''] %}
+    <a href="{{ url_for('admin_leaves') }}?status={{ s }}"
+       class="tab {% if status_filter == s %}active{% endif %}">
+      {% if s == '' %}All Requests
+      {% elif s == 'pending' %}⏳ Pending
+      {% elif s == 'approved' %}✅ Approved
+      {% else %}❌ Rejected{% endif %}
+    </a>
+  {% endfor %}
+</div>
+{% endif %}
+
+<!-- Leave Table -->
+<div class="card">
+  <div class="card-body p-0">
+    {% if leaves %}
+    <table class="table">
+      <thead>
+        <tr>
+          {% if is_admin %}<th>Employee</th>{% endif %}
+          <th>Type</th>
+          <th>Start</th>
+          <th>End</th>
+          <th>Days</th>
+          <th>Reason</th>
+          <th>Status</th>
+          <th>Actions / Notes</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in leaves %}
+          {% if is_admin %}
+            {% set leave = row[0] %}
+            {% set emp = row[1] %}
+          {% else %}
+            {% set leave = row %}
+          {% endif %}
+        <tr>
+          {% if is_admin %}
+          <td>
+            <div class="emp-cell">
+              <div class="avatar-sm">{{ emp.first_name[0] }}</div>
+              <div>
+                <div class="fw-600">{{ emp.full_name }}</div>
+                <div class="text-muted text-sm">{{ emp.department or '' }}</div>
+              </div>
+            </div>
+          </td>
+          {% endif %}
+          <td>
+            <span class="leave-type leave-{{ leave.leave_type }}">
+              {{ leave.leave_type | title }}
+            </span>
+          </td>
+          <td>{{ leave.start_date.strftime('%b %d, %Y') }}</td>
+          <td>{{ leave.end_date.strftime('%b %d, %Y') }}</td>
+          <td>{{ leave.days_requested }}</td>
+          <td class="text-truncate" style="max-width:180px" title="{{ leave.reason }}">
+            {{ leave.reason or '—' }}
+          </td>
+          <td><span class="badge {{ leave.status_badge }}">{{ leave.status | title }}</span></td>
+          <td>
+            {% if is_admin and leave.status == 'pending' %}
+              <button class="btn btn-sm btn-success"
+                      onclick="reviewLeave({{ leave.id }}, '{{ emp.full_name }}')">
+                Review
+              </button>
+            {% elif is_admin %}
+              <span class="text-muted text-sm">
+                {{ leave.reviewed_at.strftime('%b %d') if leave.reviewed_at else '—' }}
+              </span>
+            {% elif not is_admin and leave.status == 'pending' %}
+              <form method="POST" action="{{ url_for('cancel_leave', leave_id=leave.id) }}" style="display:inline;" onsubmit="return confirm('Are you sure you want to cancel this leave request?');">
+                <button type="submit" class="btn btn-sm btn-danger">Cancel Request</button>
+              </form>
+            {% else %}
+              {% if leave.admin_note %}
+                <span class="text-muted text-sm" title="{{ leave.admin_note }}">Note: {{ leave.admin_note }}</span>
+              {% else %}—{% endif %}
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <div class="empty-state large">
+      <svg viewBox="0 0 24 24" width="64" height="64"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14,2 14,8 20,8"/></svg>
+      <h3>No leave requests</h3>
+      <p>{{ 'No requests match the selected filter.' if is_admin else 'You have not submitted any leave requests yet.' }}</p>
+    </div>
+    {% endif %}
+  </div>
+</div>
+
+<!-- New Leave Request Modal (Employee) -->
+{% if not is_admin %}
+<div class="modal-overlay" id="leaveModal" style="display:none">
+  <div class="modal">
+    <div class="modal-header">
+      <h3>Request Leave</h3>
+      <button onclick="document.getElementById('leaveModal').style.display='none'" class="modal-close">×</button>
+    </div>
+    <form method="POST" action="{{ url_for('leave_request') }}">
+      <div class="modal-body">
+        <div class="form-group">
+          <label>Leave Type <span class="req">*</span></label>
+          <select name="leave_type" required>
+            <option value="vacation">🏖 Vacation</option>
+            <option value="sick">🤒 Sick Leave</option>
+            <option value="personal">👤 Personal</option>
+            <option value="other">📋 Other</option>
+          </select>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Start Date <span class="req">*</span></label>
+            <input type="date" name="start_date" required
+                   min="{{ current_date.strftime('%Y-%m-%d') }}" value="{{ current_date.strftime('%Y-%m-%d') }}" />
+          </div>
+          <div class="form-group">
+            <label>End Date <span class="req">*</span></label>
+            <input type="date" name="end_date" required
+                   min="{{ current_date.strftime('%Y-%m-%d') }}" value="{{ current_date.strftime('%Y-%m-%d') }}" />
+          </div>
+        </div>
+        <div class="form-group">
+          <label>Reason</label>
+          <textarea name="reason" rows="3" placeholder="Optional reason for request…"></textarea>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button"
+                onclick="document.getElementById('leaveModal').style.display='none'"
+                class="btn btn-ghost">Cancel</button>
+        <button type="submit" class="btn btn-primary">Submit Request</button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endif %}
+
+<!-- Review Modal (Admin) -->
+{% if is_admin %}
+<div class="modal-overlay" id="reviewModal" style="display:none">
+  <div class="modal">
+    <div class="modal-header">
+      <h3>Review Leave Request</h3>
+      <button onclick="closeReviewModal()" class="modal-close">×</button>
+    </div>
+    <form method="POST" id="reviewForm">
+      <div class="modal-body">
+        <p id="reviewEmpName" class="review-name" style="font-size:15px; font-weight:700; margin-bottom:12px;"></p>
+        <div class="form-group">
+          <label>Admin Note (optional)</label>
+          <textarea name="admin_note" rows="3" placeholder="Add a note for employee…"></textarea>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" onclick="closeReviewModal()" class="btn btn-ghost">Cancel</button>
+        <button type="submit" name="action" value="reject" class="btn btn-danger">Reject</button>
+        <button type="submit" name="action" value="approve" class="btn btn-success">Approve</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script>
+function reviewLeave(id, name) {
+  document.getElementById('reviewForm').action = '/admin/leaves/' + id + '/action';
+  document.getElementById('reviewEmpName').textContent = 'Reviewing request for: ' + name;
+  document.getElementById('reviewModal').style.display = 'flex';
+}
+function closeReviewModal() {
+  document.getElementById('reviewModal').style.display = 'none';
+}
+</script>
+{% endif %}
+{% endblock %}

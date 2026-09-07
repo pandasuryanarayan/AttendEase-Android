@@ -1,0 +1,6 @@
+{
+  "name": "AttendEase",
+  "description": "Modern Employee Attendance Management & Payroll Automation System",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

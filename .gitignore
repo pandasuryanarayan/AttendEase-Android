@@ -1,0 +1,13 @@
+# Flask App
+flask-app/venv/
+flask-app/__pycache__/
+flask-app/instance/
+*.db
+*.pyc
+
+# React App
+react-app/node_modules/
+react-app/dist/
+
+# System / OS
+.DS_Store

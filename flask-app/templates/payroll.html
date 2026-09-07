@@ -1,0 +1,114 @@
+{% extends "base.html" %}
+{% block title %}Run Monthly Payroll{% endblock %}
+{% block page_title %}Run Monthly Payroll{% endblock %}
+{% block content %}
+    <div class="page-header">
+      <div>
+        <h2>⚡ Run Monthly Payroll Engine</h2>
+        <p class="subtitle">Execute monthly payday run for all staff using active policy rules & attendance logs</p>
+      </div>
+      <div class="header-actions">
+        <a href="{{ url_for('admin_invoices') }}" class="btn btn-secondary">
+          📄 View Invoices Register
+        </a>
+        <a href="{{ url_for('payroll_settings') }}" class="btn btn-secondary">
+          ⚙️ Edit Rules Policy
+        </a>
+      </div>
+    </div>
+
+    <!-- Active Engine Status Bar -->
+    <div class="rule-status-header">
+      <div style="display:flex; align-items:center; gap:14px; flex-wrap:wrap;">
+        <span class="badge {% if rules.rule_status == 'ACTIVE' %}badge-success{% else %}badge-warning{% endif %}" style="font-size:12.5px; padding:6px 12px; font-weight:800;">
+          STATUS: {{ rules.rule_status or 'ACTIVE' }}
+        </span>
+        <span style="font-size:13px; font-weight:700; color:var(--text-muted);">
+          Active Rules Effective: <strong style="color:var(--text);">{{ rules.effective_from or '01-Aug-2026' }}</strong>
+        </span>
+        <span style="font-size:13px; font-weight:700; color:var(--text-muted);">
+          Engine Version: <strong style="color:var(--text);">v{{ rules.version or '2.4.0' }}</strong>
+        </span>
+      </div>
+    </div>
+
+    <div class="settings-grid-2">
+      <!-- Left: Execution Controls Card -->
+      <div class="card" style="padding:24px;">
+        <div style="font-weight:800; font-size:16px; margin-bottom:6px; color:var(--text);">
+          📅 Select Pay Period & Trigger Monthly Payroll Run
+        </div>
+        <div style="font-size:13px; color:var(--text-muted); margin-bottom:20px;">
+          Select target month & year below to execute the payroll engine for all active employees.
+        </div>
+
+        <form method="POST" action="{{ url_for('run_payroll') }}" style="display:flex; flex-direction:column; gap:16px;">
+          <div class="form-row">
+            <div class="form-group">
+              <label style="font-weight:700;">Target Month</label>
+              <select name="month" id="run-payroll-month" class="form-input" required>
+                {% for m in months %}
+                <option value="{{ loop.index }}" {% if loop.index == selected_month %}selected{% endif %}>{{ m }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="form-group">
+              <label style="font-weight:700;">Target Year</label>
+              <input type="number" name="year" id="run-payroll-year" class="form-input" value="{{ selected_year }}" min="2020" max="2030" required />
+            </div>
+          </div>
+
+          <div style="padding:16px; background:var(--surface-secondary); border:1px solid var(--border); border-radius:var(--radius-sm); font-size:13px;">
+            <div style="font-weight:700; margin-bottom:6px; color:var(--primary);">
+              ⚡ Operational Run Check:
+            </div>
+            <ul style="margin:0; padding-left:18px; color:var(--text-muted); line-height:1.6;">
+              <li>Active Employees to Process: <strong>{{ emp_count }} Employees</strong></li>
+              <li>Calculates basic pay, HRA, allowances, dual overtime (8h/40h) & LOP absent days</li>
+              <li>Applies statutory PF, TDS income tax & Professional Tax slabs</li>
+              <li>Generates official printable Tax Invoices & Individual Payslip PDFs</li>
+            </ul>
+          </div>
+
+          <button type="submit" class="btn btn-primary btn-lg" style="width:100%; padding:14px 24px; font-size:15px; font-weight:800; justify-content:center; margin-top:8px;">
+            ⚡ Run Monthly Payroll & Generate Invoices
+          </button>
+        </form>
+      </div>
+
+      <!-- Right: Operational Status Card -->
+      <div class="card" style="padding:24px;">
+        <div style="font-weight:800; font-size:16px; margin-bottom:6px; color:var(--text);">
+          📊 Current Period Status: {{ months[selected_month - 1] }} {{ selected_year }}
+        </div>
+        <div style="font-size:13px; color:var(--text-muted); margin-bottom:16px;">
+          Status of invoices generated for the selected month
+        </div>
+
+        <div style="display:flex; flex-direction:column; gap:12px; margin-bottom:20px;">
+          <div style="padding:14px; background:var(--surface-secondary); border-radius:var(--radius-sm); display:flex; justify-content:space-between; align-items:center;">
+            <span>Generated Invoices Count:</span>
+            <span class="badge {% if existing_count > 0 %}badge-success{% else %}badge-warning{% endif %}">{{ existing_count }} Invoices</span>
+          </div>
+          <div style="padding:14px; background:var(--surface-secondary); border-radius:var(--radius-sm); display:flex; justify-content:space-between; align-items:center;">
+            <span>Total Gross Pay:</span>
+            <strong>{{ format_inr(total_gross) }}</strong>
+          </div>
+          <div style="padding:14px; background:var(--surface-secondary); border-radius:var(--radius-sm); display:flex; justify-content:space-between; align-items:center;">
+            <span>Total Net Payout:</span>
+            <strong style="color:#059669; font-size:16px;">{{ format_inr(total_net) }}</strong>
+          </div>
+        </div>
+
+        {% if existing_count > 0 %}
+          <a href="{{ url_for('admin_invoices', month=selected_month, year=selected_year) }}" class="btn btn-primary btn-animated-next" style="width:100%; justify-content:center; padding:12px 20px; font-weight:800; font-size:14px; border-radius:var(--radius-sm);">
+            <span>Go to Invoices Register & Download Payslips</span>
+            <svg class="arrow-icon-svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+              <line x1="5" y1="12" x2="19" y2="12"></line>
+              <polyline points="12 5 19 12 12 19"></polyline>
+            </svg>
+          </a>
+        {% endif %}
+      </div>
+    </div>
+{% endblock %}

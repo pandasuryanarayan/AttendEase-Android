@@ -1,0 +1,123 @@
+{% extends "base.html" %}
+
+{% block title %}My Payslips & Tax Invoices{% endblock %}
+{% block page_title %}My Payslips & Tax Invoices{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div>
+    <h2>My Payslips & Tax Invoices</h2>
+    <p class="subtitle">View and download your monthly compensation breakdowns in INR (₹)</p>
+  </div>
+</div>
+
+<!-- Summary KPI Cards -->
+<div class="stats-grid stats-grid-4" style="margin-bottom: 24px;">
+  <div class="stat-card stat-blue">
+    <div class="stat-icon">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M6 3h12M6 8h12M6 13h5a4 4 0 0 0 0-8M6 13l8 8"/>
+      </svg>
+    </div>
+    <div class="stat-info">
+      <span class="stat-value">{{ ytd_net|format_inr }}</span>
+      <span class="stat-label">Total Net Received</span>
+    </div>
+  </div>
+  <div class="stat-card stat-green">
+    <div class="stat-icon">
+      <svg viewBox="0 0 24 24"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+    </div>
+    <div class="stat-info">
+      <span class="stat-value">{{ ytd_gross|format_inr }}</span>
+      <span class="stat-label">Total Gross Earnings</span>
+    </div>
+  </div>
+  <div class="stat-card stat-purple">
+    <div class="stat-icon">
+      <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+    </div>
+    <div class="stat-info">
+      <span class="stat-value">{{ ytd_ot }}h</span>
+      <span class="stat-label">Total Overtime Hours</span>
+    </div>
+  </div>
+  <div class="stat-card stat-red">
+    <div class="stat-icon">
+      <svg viewBox="0 0 24 24"><rect x="1" y="4" width="22" height="16" rx="2" ry="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>
+    </div>
+    <div class="stat-info">
+      <span class="stat-value">{{ ytd_tax|format_inr }}</span>
+      <span class="stat-label">TDS Tax Paid</span>
+    </div>
+  </div>
+</div>
+
+<!-- Payslip History Card -->
+<div class="card">
+  <div class="card-header">
+    <h3>My Compensation History</h3>
+  </div>
+  <div class="card-body p-0">
+    <div class="table-responsive">
+      <table class="table">
+        <thead>
+          <tr>
+            <th>Payslip #</th>
+            <th>Month / Period</th>
+            <th>Present / Working</th>
+            <th>Logged Hours & OT</th>
+            <th>Gross Pay</th>
+            <th>Deductions</th>
+            <th>Net Salary (INR)</th>
+            <th>Status</th>
+            <th style="text-align:right">Action</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% if invoices %}
+            {% for inv in invoices %}
+              <tr>
+                <td>
+                  <a href="{{ url_for('view_invoice', invoice_id=inv.id) }}" class="text-primary" style="font-family:monospace; font-weight:800;">
+                    {{ inv.invoice_number }}
+                  </a>
+                </td>
+                <td class="fw-600">{{ months[inv.month - 1] }} {{ inv.year }}</td>
+                <td>{{ inv.present_days }} / {{ inv.working_days }} days</td>
+                <td>
+                  {{ inv.total_hours }}h
+                  {% if inv.overtime_hours > 0 %}
+                    <div class="text-success text-sm font-semibold">+{{ inv.overtime_hours }}h OT</div>
+                  {% endif %}
+                </td>
+                <td class="fw-600">{{ inv.gross_earnings|format_inr }}</td>
+                <td class="text-danger fw-600">-{{ inv.total_deductions|format_inr }}</td>
+                <td>
+                  <strong style="color:#059669; font-size:15px;">{{ inv.net_pay|format_inr }}</strong>
+                </td>
+                <td>
+                  <span class="badge {% if inv.status == 'paid' %}badge-success badge-no-dot{% else %}badge-info{% endif %}">
+                    {% if inv.status == 'paid' %}✓ PAID{% else %}{{ inv.status|upper if inv.status else 'APPROVED' }}{% endif %}
+                  </span>
+                </td>
+                <td style="text-align:right;">
+                  <a href="{{ url_for('view_invoice', invoice_id=inv.id) }}" class="btn btn-sm btn-secondary">
+                    📄 View & PDF
+                  </a>
+                </td>
+              </tr>
+            {% endfor %}
+          {% else %}
+            <tr>
+              <td colspan="9" style="text-align:center; padding: 36px; color: var(--text-muted);">
+                No payslips generated for your account yet.
+              </td>
+            </tr>
+          {% endif %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endblock %}

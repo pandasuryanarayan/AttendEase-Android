@@ -1,0 +1,388 @@
+{% extends "base.html" %}
+{% block title %}Tax Invoice & Salary Payslip{% endblock %}
+{% block page_title %}Tax Invoice & Salary Payslip{% endblock %}
+
+{% block content %}
+{% set isPaid = inv.status == 'paid' %}
+{% set customEarnings = inv.custom_line_items | selectattr('type', 'equalto', 'earning') | list if inv.custom_line_items else [] %}
+{% set customDeductions = inv.custom_line_items | selectattr('type', 'equalto', 'deduction') | list if inv.custom_line_items else [] %}
+
+<!-- Top Action Toolbar (Hidden in Print) -->
+<div class="invoice-toolbar">
+  <div>
+    <a href="{{ url_for('admin_invoices') if is_admin else url_for('my_payslips') }}" class="btn btn-secondary btn-animated-back" style="padding:9px 18px; font-weight:700;">
+      <svg class="arrow-icon-svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+        <line x1="19" y1="12" x2="5" y2="12"></line>
+        <polyline points="12 19 5 12 12 5"></polyline>
+      </svg>
+      <span>Back to {{ 'Payment Processing' if is_admin else 'My Payslips' }}</span>
+    </a>
+  </div>
+  <div style="display:flex; gap:10px;">
+    {% if is_admin %}
+      <button type="button" class="btn btn-secondary" onclick="openAddLineItemModal('{{ inv.id }}')">
+        ➕ Add Line Item
+      </button>
+      {% if not isPaid %}
+        <button type="button" class="btn btn-primary" onclick="openMarkPaidModal('{{ inv.id }}')">
+          💵 Record Payment
+        </button>
+      {% endif %}
+    {% endif %}
+    <button type="button" class="btn btn-secondary" onclick="window.print()">
+      <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
+      Print / Download PDF
+    </button>
+  </div>
+</div>
+
+<!-- The Invoice / Payslip Document Card -->
+<div class="invoice-card" id="printable-invoice">
+  <!-- Header -->
+  <div class="invoice-top">
+    <div>
+      <div class="invoice-company-brand">
+        <div style="display:inline-flex; padding:10px; background:var(--primary-light); border-radius:12px;">
+          <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="var(--primary)" stroke-width="2">
+            <rect x="3" y="4" width="18" height="18" rx="3"/>
+            <path d="M8 2v4M16 2v4M3 10h18" stroke-linecap="round"/>
+            <circle cx="9" cy="15" r="1.5" fill="var(--primary)"/>
+            <circle cx="15" cy="15" r="1.5" fill="var(--primary)"/>
+          </svg>
+        </div>
+        <div class="invoice-company-info">
+          <h4>{{ company.company_name }}</h4>
+          <p>{{ company.address }}<br>GSTIN: {{ company.gstin }} • {{ company.email }}</p>
+        </div>
+      </div>
+    </div>
+    <div class="invoice-title-block">
+      <div class="invoice-badge-title">Official Tax Invoice & Salary Payslip</div>
+      <div class="invoice-num">{{ inv.invoice_number }}</div>
+      <div>
+        <span class="invoice-status-tag badge {{ 'badge-success' if isPaid else 'badge-info' }}">
+          {{ 'PAID & DISBURSED' if isPaid else (inv.status or 'APPROVED') | upper }}
+        </span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Employee & Bank Profile Grid -->
+  <div class="invoice-meta-grid">
+    <div class="meta-box">
+      <h5>Employee Information</h5>
+      <div class="meta-box-content">
+        <span class="meta-label">Employee Name:</span>
+        <span class="meta-val">{{ emp.first_name }} {{ emp.last_name }}</span>
+        <span class="meta-label">Employee ID:</span>
+        <span class="meta-val">EMP-{{ '%04d' % emp.id }}</span>
+        <span class="meta-label">Department:</span>
+        <span class="meta-val">{{ emp.department or '—' }}</span>
+        <span class="meta-label">Designation:</span>
+        <span class="meta-val">{{ emp.position or 'Employee' }}</span>
+        <span class="meta-label">Base CTC Scale:</span>
+        <span class="meta-val">{{ (inv.base_salary or sal.base_salary or 50000) | format_inr }}
+          {% if inv.applied_salary_reason %}
+            <span class="badge badge-info" style="font-size:10px; margin-left:4px;">{{ inv.applied_salary_reason }}</span>
+          {% endif %}
+        </span>
+        <span class="meta-label">PAN Number:</span>
+        <span class="meta-val">{{ sal.pan_no or 'ABCDE1234F' }}</span>
+      </div>
+    </div>
+    <div class="meta-box">
+      <h5>Disbursement & Bank Info</h5>
+      <div class="meta-box-content">
+        <span class="meta-label">Pay Period:</span>
+        <span class="meta-val">{{ months[inv.month - 1] }} 01, {{ inv.year }} – {{ months[inv.month - 1] }} {% if inv.month in [1,3,5,7,8,10,12] %}31{% elif inv.month == 2 %}{% if inv.year % 4 == 0 and (inv.year % 100 != 0 or inv.year % 400 == 0) %}29{% else %}28{% endif %}{% else %}30{% endif %}, {{ inv.year }}</span>
+        <span class="meta-label">Bank Name:</span>
+        <span class="meta-val">{{ sal.bank_name or 'HDFC Bank Ltd.' }}</span>
+        <span class="meta-label">Account No:</span>
+        <span class="meta-val">{{ sal.bank_account_no or '••••••••4892' }}</span>
+        <span class="meta-label">IFSC Code:</span>
+        <span class="meta-val">{{ sal.bank_ifsc or 'HDFC0001001' }}</span>
+        <span class="meta-label">Payment Mode:</span>
+        <span class="meta-val">{{ inv.payment_mode or 'NEFT / Direct Transfer' }}</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Attendance & Hours Summary Pill Bar -->
+  <div class="attendance-pill-bar">
+    <div class="att-pill-item">
+      <div class="att-pill-val">{{ inv.working_days }}</div>
+      <div class="att-pill-lbl">Working Days</div>
+    </div>
+    <div class="att-pill-item">
+      <div class="att-pill-val" style="color:#059669;">{{ inv.present_days }}</div>
+      <div class="att-pill-lbl">Days Present</div>
+    </div>
+    <div class="att-pill-item">
+      <div class="att-pill-val" style="color:#2563eb;">{{ inv.paid_leaves }}</div>
+      <div class="att-pill-lbl">Paid Leaves</div>
+    </div>
+    <div class="att-pill-item">
+      <div class="att-pill-val" style="color:#e11d48;">{{ inv.absent_days }}</div>
+      <div class="att-pill-lbl">Loss of Pay (LOP)</div>
+    </div>
+    <div class="att-pill-item">
+      <div class="att-pill-val">{{ inv.total_hours }}h</div>
+      <div class="att-pill-lbl">Total Logged</div>
+    </div>
+    <div class="att-pill-item">
+      <div class="att-pill-val" style="color:#7c3aed;">{{ inv.overtime_hours }}h</div>
+      <div class="att-pill-lbl">Overtime (8h/40h)</div>
+    </div>
+  </div>
+
+  <!-- Side-by-Side Earnings vs Deductions Table -->
+  <div class="invoice-tables-split">
+    <!-- Left: Earnings -->
+    <div class="subtable-card">
+      <div class="subtable-header header-earnings">
+        <span>Earnings Component</span>
+        <span>Amount (INR)</span>
+      </div>
+      <table class="invoice-data-table">
+        <tbody>
+          <tr>
+            <td>Basic Salary</td>
+            <td class="val-col">{{ inv.basic_pay | format_inr }}</td>
+          </tr>
+          <tr>
+            <td>House Rent Allowance (HRA)</td>
+            <td class="val-col">{{ inv.hra | format_inr }}</td>
+          </tr>
+          <tr>
+            <td>Special / Flexi Allowance</td>
+            <td class="val-col">{{ inv.special_allowance | format_inr }}</td>
+          </tr>
+          {% if inv.conveyance_allowance and inv.conveyance_allowance > 0 %}
+          <tr>
+            <td>Conveyance Allowance</td>
+            <td class="val-col">{{ inv.conveyance_allowance | format_inr }}</td>
+          </tr>
+          {% endif %}
+          {% if inv.medical_allowance and inv.medical_allowance > 0 %}
+          <tr>
+            <td>Medical Allowance</td>
+            <td class="val-col">{{ inv.medical_allowance | format_inr }}</td>
+          </tr>
+          {% endif %}
+          <tr>
+            <td>
+              Overtime Pay
+              <span class="text-muted text-sm font-semibold" style="display:block">
+                {{ inv.overtime_hours }} hrs @ {{ (inv.standard_hourly_rate * (inv.ot_multiplier or 1.5)) | format_inr }}/hr ({{ inv.ot_multiplier or 1.5 }}x)
+              </span>
+            </td>
+            <td class="val-col">{{ inv.overtime_pay | format_inr }}</td>
+          </tr>
+          {% for item in inv.type_custom_earnings or [] %}
+          <tr>
+            <td>{{ item.name }}</td>
+            <td class="val-col">{{ item.amount | format_inr }}</td>
+          </tr>
+          {% endfor %}
+          {% for item in customEarnings %}
+          <tr>
+            <td>{{ item.name }}</td>
+            <td class="val-col">{{ item.amount | format_inr }}</td>
+          </tr>
+          {% endfor %}
+          {% if inv.bonus and inv.bonus > 0 %}
+          <tr>
+            <td>Performance Bonus</td>
+            <td class="val-col">{{ inv.bonus | format_inr }}</td>
+          </tr>
+          {% endif %}
+        </tbody>
+        <tfoot>
+          <tr class="subtable-total-row">
+            <td>Total Gross Earnings (A)</td>
+            <td class="val-col" style="color:#065f46;">{{ inv.gross_earnings | format_inr }}</td>
+          </tr>
+        </tfoot>
+      </table>
+    </div>
+
+    <!-- Right: Deductions -->
+    <div class="subtable-card">
+      <div class="subtable-header header-deductions">
+        <span>Deductions & Taxes</span>
+        <span>Amount (INR)</span>
+      </div>
+      <table class="invoice-data-table">
+        <tbody>
+          <tr>
+            <td>
+              Loss of Pay (LOP)
+              {% if inv.absent_days and inv.absent_days > 0 %}
+                <span class="text-muted text-sm" style="display:block">{{ inv.absent_days }} unexcused absent days</span>
+              {% endif %}
+            </td>
+            <td class="val-col">{{ inv.lop_deduction | format_inr }}</td>
+          </tr>
+          <tr>
+            <td>
+              Late Arrival Deductions
+              {% if inv.late_days and inv.late_days > 2 %}
+                <span class="text-muted text-sm" style="display:block">{{ inv.late_days }} late arrivals</span>
+              {% endif %}
+            </td>
+            <td class="val-col">{{ inv.late_deduction | format_inr }}</td>
+          </tr>
+          <tr>
+            <td>Provident Fund (PF / EPF)</td>
+            <td class="val-col">{{ inv.pf_deduction | format_inr }}</td>
+          </tr>
+          <tr>
+            <td>Income Tax Withholding (TDS)</td>
+            <td class="val-col">{{ inv.tds_tax | format_inr }}</td>
+          </tr>
+          <tr>
+            <td>Group Corporate Health Insurance</td>
+            <td class="val-col">{{ inv.insurance | format_inr }}</td>
+          </tr>
+          {% if inv.professional_tax and inv.professional_tax > 0 %}
+          <tr>
+            <td>Professional Tax (PT)</td>
+            <td class="val-col">{{ inv.professional_tax | format_inr }}</td>
+          </tr>
+          {% endif %}
+          {% for item in inv.type_custom_deductions or [] %}
+          <tr>
+            <td>{{ item.name }}</td>
+            <td class="val-col">{{ item.amount | format_inr }}</td>
+          </tr>
+          {% endfor %}
+          {% for item in customDeductions %}
+          <tr>
+            <td>{{ item.name }}</td>
+            <td class="val-col">{{ item.amount | format_inr }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+        <tfoot>
+          <tr class="subtable-total-row">
+            <td>Total Deductions (B)</td>
+            <td class="val-col" style="color:#9f1239;">-{{ inv.total_deductions | format_inr }}</td>
+          </tr>
+        </tfoot>
+      </table>
+    </div>
+  </div>
+
+  <!-- Net Salary Payable Banner -->
+  <div class="net-pay-banner">
+    <div class="net-pay-left">
+      <h4>Net Salary Payable (Gross - Deductions)</h4>
+      <div class="net-pay-words">Amount in words: <strong>{{ number_to_words_inr(inv.net_pay) }}</strong></div>
+    </div>
+    <div class="net-pay-amount">{{ inv.net_pay | format_inr }}</div>
+  </div>
+
+  <!-- Footer Settlement & Signatory -->
+  <div class="invoice-footer-grid">
+    <div class="payment-info-box">
+      <strong>Disbursement Status:</strong> {% if isPaid %}Settled on {{ inv.paid_at if inv.paid_at else 'N/A' }}{% else %}Approved for payout processing{% endif %}<br>
+      <strong>Transaction Ref / UTR:</strong> {{ inv.transaction_ref or 'PENDING DISBURSEMENT' }}<br>
+      <span style="font-size:11.5px; color:#64748b;">{{ company.disclaimer }}</span>
+    </div>
+    <div class="signatory-box">
+      <div class="seal-tag">✓ VERIFIED & APPROVED</div>
+      <div class="signatory-title">{{ company.signatory_title }}</div>
+      <div style="font-size:11.5px; color:var(--text-muted);">{{ company.company_name }}</div>
+    </div>
+  </div>
+</div>
+
+{% if is_admin %}
+<!-- Add Custom Line Item Modal (Admin Only) -->
+<div class="modal-overlay" id="add-item-modal" style="display:none;">
+  <div class="modal" style="max-width:480px;">
+    <div class="modal-header">
+      <h3>Add Custom Line Item</h3>
+      <button class="modal-close" onclick="closeAddLineItemModal()">×</button>
+    </div>
+    <form id="add-item-form" method="POST" action="{{ url_for('add_line_item', invoice_id=inv.id) }}">
+      <div class="form-group">
+        <label>Item Type</label>
+        <select name="type" id="item-type" class="form-input" required>
+          <option value="earning">Earning / Allowance / Bonus (+)</option>
+          <option value="deduction">Deduction / Recovery (-)</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Description / Item Name <span class="req">*</span></label>
+        <input type="text" name="name" id="item-name" class="form-input" placeholder="e.g. Performance Incentive, Travel Reimbursement" required />
+      </div>
+      <div class="form-group">
+        <label>Amount in INR (₹) <span class="req">*</span></label>
+        <input type="number" name="amount" id="item-amount" class="form-input" placeholder="e.g. 2500" min="1" step="1" required />
+      </div>
+      <div style="display:flex; justify-content:flex-end; gap:10px; margin-top:20px;">
+        <button type="button" class="btn btn-secondary" onclick="closeAddLineItemModal()">Cancel</button>
+        <button type="submit" class="btn btn-primary">Add Item & Recalculate</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+{% if not isPaid %}
+<!-- Mark Paid Modal -->
+<div class="modal-overlay" id="mark-paid-modal" style="display:none;">
+  <div class="modal" style="max-width:480px;">
+    <div class="modal-header">
+      <h3>Record Salary Disbursement</h3>
+      <button class="modal-close" onclick="closeMarkPaidModal()">×</button>
+    </div>
+    <form id="mark-paid-form" method="POST" action="{{ url_for('mark_invoice_paid', invoice_id=inv.id) }}">
+      <div class="form-group">
+        <label>Payment Transfer Mode</label>
+        <select name="payment_mode" id="paid-mode" class="form-input" required>
+          <option value="NEFT / Direct Bank Transfer">NEFT / Direct Bank Transfer</option>
+          <option value="RTGS">RTGS (High Value)</option>
+          <option value="IMPS / Instant Transfer">IMPS / Instant Transfer</option>
+          <option value="UPI Direct Pay">UPI Direct Pay</option>
+          <option value="Corporate Cheque">Corporate Cheque</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Transaction Reference ID / Cheque # <span class="req">*</span></label>
+        <input type="text" name="transaction_ref" id="paid-ref" class="form-input" placeholder="e.g. TXN9872134598" required />
+      </div>
+      <div class="form-group">
+        <label>Payment Date</label>
+        <input type="date" name="paid_at" id="paid-date" class="form-input" value="{{ current_date.strftime('%Y-%m-%d') if current_date else '' }}" required />
+      </div>
+      <div style="display:flex; justify-content:flex-end; gap:10px; margin-top:20px;">
+        <button type="button" class="btn btn-secondary" onclick="closeMarkPaidModal()">Cancel</button>
+        <button type="submit" class="btn btn-primary">Confirm & Mark as Paid</button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endif %}
+{% endif %}
+
+<script>
+  function openAddLineItemModal(id) {
+    document.getElementById('add-item-modal').style.display = 'flex';
+  }
+  function closeAddLineItemModal() {
+    document.getElementById('add-item-modal').style.display = 'none';
+  }
+  
+  function openMarkPaidModal(id) {
+    document.getElementById('mark-paid-modal').style.display = 'flex';
+  }
+  function closeMarkPaidModal() {
+    document.getElementById('mark-paid-modal').style.display = 'none';
+  }
+
+  {% if auto_print %}
+  setTimeout(() => window.print(), 450);
+  {% endif %}
+</script>
+{% endblock %}

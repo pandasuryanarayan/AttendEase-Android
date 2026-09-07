@@ -1,0 +1,875 @@
+<!-- templates/payroll_settings.html -->
+{% extends "base.html" %}
+{% block title %}Payroll Policy & Rules Console{% endblock %}
+{% block page_title %}Payroll Policy & Rules Console{% endblock %}
+{% block content %}
+
+<div class="page-header">
+  <div>
+    <h2>Payroll Policy & Rules Console</h2>
+    <p class="subtitle">Structured rule configuration engine defining salary components, statutory taxes, priority overrides & test simulations</p>
+  </div>
+  <div class="header-actions">
+    <a href="{{ url_for('admin_payroll') }}" class="btn btn-secondary btn-animated-back" style="padding:9px 18px; font-weight:700;">
+      <svg class="arrow-icon-svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+        <line x1="19" y1="12" x2="5" y2="12"></line>
+        <polyline points="12 19 5 12 12 5"></polyline>
+      </svg>
+      <span>Back to Payment Processing</span>
+    </a>
+    <form method="POST" action="{{ url_for('run_payroll') }}" style="display:inline;">
+      <input type="hidden" name="month" value="{{ now.month }}">
+      <input type="hidden" name="year" value="{{ now.year }}">
+      <button type="submit" class="btn btn-primary">
+        ⚡ Apply Active Rules & Process Payroll
+      </button>
+    </form>
+  </div>
+</div>
+
+<!-- Rule Engine Status & Version Header -->
+<div class="rule-status-header">
+  <div style="display:flex; align-items:center; gap:14px; flex-wrap:wrap;">
+    <span class="badge {% if rules.get('rule_status') == 'ACTIVE' %}badge-success{% else %}badge-warning{% endif %}" style="font-size:12.5px; padding:6px 12px; font-weight:800;">
+      STATUS: {{ rules.get('rule_status', 'ACTIVE') }}
+    </span>
+    <span style="font-size:13px; font-weight:700; color:var(--text-muted);">
+      Effective Date: <strong style="color:var(--text);">{{ rules.get('effective_from', '01-Aug-2026') }}</strong>
+    </span>
+    <span style="font-size:13px; font-weight:700; color:var(--text-muted);">
+      Engine Version: <strong style="color:var(--text);">v{{ rules.get('version', '2.4.0') }}</strong>
+    </span>
+  </div>
+  <div style="display:flex; gap:10px; flex-wrap:wrap;">
+    <a href="{{ url_for('payroll_settings', tab='simulation') }}" class="btn btn-sm btn-secondary">
+      🧪 Test Payroll Simulation
+    </a>
+    <form method="POST" style="display:inline;">
+      <input type="hidden" name="action" value="activate_rules">
+      <input type="hidden" name="tab" value="{{ tab }}">
+      <button type="submit" class="btn btn-sm btn-success">
+        🚀 Save & Activate Rules
+      </button>
+    </form>
+  </div>
+</div>
+
+<!-- Tab Navigation (7 Structured Sections) -->
+<div class="settings-tab-nav">
+  <a href="{{ url_for('payroll_settings', tab='structure') }}" class="settings-tab-btn {% if tab == 'structure' %}active{% endif %}">
+    💵 1. Salary & Earnings Structure
+  </a>
+  <a href="{{ url_for('payroll_settings', tab='deductions') }}" class="settings-tab-btn {% if tab == 'deductions' %}active{% endif %}">
+    🛡️ 2. Deductions & Statutory Taxes
+  </a>
+  <a href="{{ url_for('payroll_settings', tab='attendance_ot') }}" class="settings-tab-btn {% if tab == 'attendance_ot' %}active{% endif %}">
+    ⏱️ 3. Attendance, LOP & Overtime
+  </a>
+  <a href="{{ url_for('payroll_settings', tab='overrides') }}" class="settings-tab-btn {% if tab == 'overrides' %}active{% endif %}">
+    🔀 4. Priority Cascade & Overrides
+  </a>
+  <a href="{{ url_for('payroll_settings', tab='types') }}" class="settings-tab-btn {% if tab == 'types' %}active{% endif %}">
+    👔 5. Category Profiles
+  </a>
+  <a href="{{ url_for('payroll_settings', tab='simulation') }}" class="settings-tab-btn {% if tab == 'simulation' %}active{% endif %}">
+    🧪 6. Test Simulation & Preview
+  </a>
+  <a href="{{ url_for('payroll_settings', tab='branding') }}" class="settings-tab-btn {% if tab == 'branding' %}active{% endif %}">
+    🏢 7. Payslip Branding & Entity
+  </a>
+</div>
+
+<!-- SECTION 1: Salary & Earnings Structure -->
+{% if tab == 'structure' %}
+<form method="POST">
+  <input type="hidden" name="action" value="save_structure">
+  <input type="hidden" name="tab" value="structure">
+
+  <div class="settings-grid-2">
+    <div class="rule-group-card">
+      <div class="rule-group-title">
+        <span>📋 Foundation Components & Calculation Types</span>
+      </div>
+      <div class="rule-group-subtitle">Configure basic percentage of Gross, HRA calculation base, and allowance components</div>
+
+      <div class="form-row">
+        <div class="form-group">
+          <label>Basic Salary Component (% of Base CTC)</label>
+          <input type="number" name="basic_pct" class="form-input" value="{{ rules.get('basic_pct', 50) }}" min="10" max="100" step="1" required />
+          <span class="form-hint">Calculation Type: Percentage of Base CTC (Default: 50%)</span>
+        </div>
+        <div class="form-group">
+          <label>HRA Component (% of Basic Salary)</label>
+          <input type="number" name="hra_pct" class="form-input" value="{{ rules.get('hra_pct', 40) }}" min="0" max="100" step="1" required />
+          <span class="form-hint">Calculation Type: Percentage of Basic Salary (Default: 40%)</span>
+        </div>
+      </div>
+
+      <div class="form-row">
+        <div class="form-group">
+          <label>Conveyance Allowance (₹ / month)</label>
+          <input type="number" name="conveyance" class="form-input" value="{{ rules.get('conveyance', 2000) }}" min="0" step="100" />
+          <span class="form-hint">Calculation Type: Fixed Amount</span>
+        </div>
+        <div class="form-group">
+          <label>Medical Allowance (₹ / month)</label>
+          <input type="number" name="medical" class="form-input" value="{{ rules.get('medical', 1500) }}" min="0" step="100" />
+          <span class="form-hint">Calculation Type: Fixed Amount</span>
+        </div>
+      </div>
+
+      <div class="formula-callout">
+        <span>ℹ️</span>
+        <span>Salary Component Formula: <strong class="formula-callout-code">Gross = Basic (50%) + HRA (40% of Basic) + Special + Conveyance + Medical + OT</strong></span>
+      </div>
+    </div>
+
+    <div class="rule-group-card">
+      <div class="rule-group-title">
+        <span>💵 Active Earnings Components Registry</span>
+      </div>
+      <div class="rule-group-subtitle">List of earnings components defined in the active payroll engine</div>
+
+      <div class="table-responsive">
+        <table class="table" style="font-size:13px;">
+          <thead>
+            <tr>
+              <th>Earnings Component</th>
+              <th>Calculation Type</th>
+              <th>Value / Basis</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong>Basic Salary</strong></td>
+              <td><span class="badge badge-info">% of Base CTC</span></td>
+              <td>{{ rules.get('basic_pct', 50) }}% of Base CTC</td>
+              <td><span class="badge badge-success">Active</span></td>
+            </tr>
+            <tr>
+              <td><strong>House Rent Allowance (HRA)</strong></td>
+              <td><span class="badge badge-info">% of Basic Salary</span></td>
+              <td>{{ rules.get('hra_pct', 40) }}% of Basic</td>
+              <td><span class="badge badge-success">Active</span></td>
+            </tr>
+            <tr>
+              <td><strong>Special Allowance</strong></td>
+              <td><span class="badge badge-secondary">Balancing / Residual</span></td>
+              <td>Calculated balancing pay</td>
+              <td><span class="badge badge-success">Active</span></td>
+            </tr>
+            <tr>
+              <td><strong>Conveyance & Medical</strong></td>
+              <td><span class="badge badge-warning">Fixed Monthly Amount</span></td>
+              <td>₹{{ rules.get('conveyance', 2000) }} / ₹{{ rules.get('medical', 1500) }}</td>
+              <td><span class="badge badge-success">Active</span></td>
+            </tr>
+            <tr>
+              <td><strong>Overtime Pay</strong></td>
+              <td><span class="badge badge-primary">Formula / Hourly Multiplier</span></td>
+              <td>(Basic / Hours) × OT Multiplier</td>
+              <td><span class="badge badge-success">Active</span></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <div style="text-align:right; margin-top:20px;">
+    <button type="submit" class="btn btn-primary">
+      💾 Save Salary Structure & Earnings Rules
+    </button>
+  </div>
+</form>
+
+<!-- SECTION 2: Deductions & Statutory Taxes -->
+{% elif tab == 'deductions' %}
+<form method="POST">
+  <input type="hidden" name="action" value="save_deductions">
+  <input type="hidden" name="tab" value="deductions">
+
+  <div class="settings-grid-2">
+    <div class="rule-group-card">
+      <div class="rule-group-title">
+        <span>🛡️ Statutory Deductions (PF, TDS & Insurance)</span>
+      </div>
+      <div class="rule-group-subtitle">Configure Provident Fund retirement percentage, TDS tax withholding and health insurance</div>
+
+      <div class="form-group">
+        <label class="checkbox-toggle-card">
+          <input type="checkbox" name="pf_enabled" checked />
+          <span>Enable Provident Fund (PF) Deduction</span>
+        </label>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>PF Rate (% of Basic Salary)</label>
+          <input type="number" name="pf_pct" class="form-input" value="{{ rules.get('pf_pct', 6.0) }}" min="0" max="25" step="0.5" />
+          <span class="form-hint">Calculation Type: Percentage of Basic Salary (Standard: 6% / 12%)</span>
+        </div>
+        <div class="form-group">
+          <label>PF Calculation Base</label>
+          <input type="text" class="form-input" value="Basic Salary Only" disabled />
+        </div>
+      </div>
+
+      <div class="form-group" style="margin-top:8px;">
+        <label class="checkbox-toggle-card">
+          <input type="checkbox" name="tds_enabled" checked />
+          <span>Enable Income Tax Withholding (TDS)</span>
+        </label>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Default TDS Rate (% of Gross)</label>
+          <input type="number" name="tds_pct" class="form-input" value="{{ rules.get('tds_pct', 10.0) }}" min="0" max="40" step="1" />
+          <span class="form-hint">Calculation Type: Percentage of Total Gross Earnings</span>
+        </div>
+        <div class="form-group">
+          <label>Group Health Insurance (₹ / month)</label>
+          <input type="number" name="insurance" class="form-input" value="{{ rules.get('insurance', 500) }}" min="0" step="100" />
+        </div>
+      </div>
+    </div>
+
+    <div class="rule-group-card">
+      <div class="rule-group-title">
+        <span>🏛️ Professional Tax (PT) Slab Rules</span>
+      </div>
+      <div class="rule-group-subtitle">Configure statutory Professional Tax slab brackets or flat monthly amount</div>
+
+      <div class="form-group">
+        <label>Professional Tax Calculation Mode</label>
+        <select name="pt_mode" class="form-input">
+          <option value="slab" selected>Slab-Based Tax Brackets (Standard Statutory)</option>
+          <option value="flat">Flat Rate (e.g. ₹200 / month)</option>
+        </select>
+      </div>
+
+      <div id="pt-slabs-container" style="margin-top:16px;">
+        <label style="font-weight:700; font-size:13px;">Professional Tax Slab Table (Gross Salary Range vs Tax Amount):</label>
+        <div class="table-responsive" style="margin-top:8px;">
+          <table class="table" style="font-size:12.5px;">
+            <thead>
+              <tr>
+                <th>Monthly Gross Salary Range (₹)</th>
+                <th>Tax Amount (₹ / month)</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>₹0 – ₹7,500</td>
+                <td><strong>₹0</strong> (Exempt)</td>
+              </tr>
+              <tr>
+                <td>₹7,501 – ₹10,000</td>
+                <td><strong>₹175</strong> / month</td>
+              </tr>
+              <tr>
+                <td>₹10,001 and above</td>
+                <td><strong>₹200</strong> / month</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div style="text-align:right; margin-top:20px;">
+    <button type="submit" class="btn btn-primary">
+      💾 Save Deductions & Statutory Tax Rules
+    </button>
+  </div>
+</form>
+
+<!-- SECTION 3: Attendance, LOP & Overtime Policy -->
+{% elif tab == 'attendance_ot' %}
+<form method="POST">
+  <input type="hidden" name="action" value="save_attendance">
+  <input type="hidden" name="tab" value="attendance_ot">
+
+  <div class="settings-grid-2">
+    <div class="rule-group-card">
+      <div class="rule-group-title">
+        <span>📅 Attendance Basis & Loss of Pay (LOP) Rules</span>
+      </div>
+      <div class="rule-group-subtitle">Configure monthly working days basis, LOP deduction formula & late arrival grace</div>
+
+      <div class="form-group">
+        <label>Monthly Salary Calculation Basis</label>
+        <select name="ao_basis" class="form-input">
+          <option value="working_days" selected>Monthly Salary / Working Days (Exclude Weekends)</option>
+          <option value="calendar_days">Monthly Salary / Calendar Days (Standard 30 Days)</option>
+        </select>
+      </div>
+
+      <div class="form-group">
+        <label>Fixed Working Days (If Fixed Mode Active)</label>
+        <input type="number" name="fixed_working_days" class="form-input" value="22" min="15" max="31" step="1" />
+      </div>
+
+      <div class="formula-callout">
+        <span>ℹ️</span>
+        <span>LOP Formula: <strong class="formula-callout-code">LOP = (Monthly Base Salary ÷ Working Days) × Unpaid Absent Days</strong></span>
+      </div>
+
+      <div class="form-group" style="margin-top:16px;">
+        <label>Monthly Grace Late Arrivals Count Allowed</label>
+        <input type="number" name="late_free_passes" class="form-input" value="{{ rules.get('late_free_passes', 2) }}" min="0" max="10" step="1" />
+        <span class="form-hint">Check-ins beyond grace count trigger late penalty deduction</span>
+      </div>
+
+      <div class="form-group">
+        <label>Late Arrival Penalty Rule</label>
+        <select name="late_penalty_type" class="form-input">
+          <option value="half_day" {% if rules.get('late_penalty_type') == 'half_day' %}selected{% endif %}>Half Day Base Deduction (0.5 Days Salary)</option>
+          <option value="quarter_day" {% if rules.get('late_penalty_type') == 'quarter_day' %}selected{% endif %}>Quarter Day Base Deduction (0.25 Days Salary)</option>
+          <option value="flat" {% if rules.get('late_penalty_type') == 'flat' %}selected{% endif %}>Flat Penalty Amount (e.g. ₹500)</option>
+          <option value="none" {% if rules.get('late_penalty_type') == 'none' %}selected{% endif %}>Warning Only (No Salary Deduction)</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="rule-group-card">
+      <div class="rule-group-title">
+        <span>⏱️ Overtime (OT) Engine Multipliers</span>
+      </div>
+      <div class="rule-group-subtitle">Configure daily/weekly overtime thresholds, hourly rate basis and multipliers</div>
+
+      <div class="form-group">
+        <label class="checkbox-toggle-card">
+          <input type="checkbox" name="ot_enabled" checked />
+          <span>Overtime Engine Enabled</span>
+        </label>
+      </div>
+
+      <div class="settings-grid-3">
+        <div class="form-group">
+          <label>Daily OT Threshold</label>
+          <input type="number" name="daily_hours_threshold" class="form-input" value="{{ rules.get('daily_hours_threshold', 8.0) }}" min="4" max="12" step="0.5" />
+          <span class="form-hint">&gt; 8.0 hours / day</span>
+        </div>
+        <div class="form-group">
+          <label>Weekly OT Threshold</label>
+          <input type="number" name="weekly_hours_threshold" class="form-input" value="{{ rules.get('weekly_hours_threshold', 40.0) }}" min="20" max="60" step="1" />
+          <span class="form-hint">&gt; 40 hours / week</span>
+        </div>
+        <div class="form-group">
+          <label>Standard Multiplier</label>
+          <select name="ot_multiplier" class="form-input">
+            <option value="1.0" {% if rules.get('ot_multiplier') == 1.0 %}selected{% endif %}>1.0x (Standard Wage)</option>
+            <option value="1.25" {% if rules.get('ot_multiplier') == 1.25 %}selected{% endif %}>1.25x (125% Rate)</option>
+            <option value="1.5" {% if rules.get('ot_multiplier', 1.5) == 1.5 %}selected{% endif %}>1.5x (Time-and-a-half)</option>
+            <option value="2.0" {% if rules.get('ot_multiplier') == 2.0 %}selected{% endif %}>2.0x (Double Time)</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="formula-callout" style="background:#f3e8ff; border-color:#e9d5ff; color:#6b21a8;">
+        <span>ℹ️</span>
+        <span>OT Rate Formula: <strong class="formula-callout-code" style="background:#fae8ff; color:#581c87;">Hourly Rate = Basic ÷ (Working Days × 8) | OT Pay = Hours × Rate × Multiplier</strong></span>
+      </div>
+    </div>
+  </div>
+
+  <div style="text-align:right; margin-top:20px;">
+    <button type="submit" class="btn btn-primary">
+      💾 Save Attendance, LOP & Overtime Policy
+    </button>
+  </div>
+</form>
+
+<!-- SECTION 4: Priority Cascade & Overrides -->
+{% elif tab == 'overrides' %}
+<div class="priority-cascade-card">
+  <div style="font-weight:800; font-size:15px; color:var(--text);">🔀 Rule Scope Priority Cascade (First Matching Rule Wins)</div>
+  <div style="font-size:12.5px; color:var(--text-muted); margin-top:4px;">When evaluating payroll rules for an employee, the system follows this strict priority hierarchy:</div>
+  
+  <div class="priority-step-list">
+    <div class="priority-step-item">
+      <span class="priority-badge-num">1</span>
+      <div>
+        <strong>Employee-Specific Rule Override</strong> (Highest Priority — Custom Employee Contract overrides all)
+      </div>
+    </div>
+    <div class="priority-step-item">
+      <span class="priority-badge-num">2</span>
+      <div>
+        <strong>Position / Designation Exception</strong> (Second Priority — Role specific exceptions e.g. System Administrator)
+      </div>
+    </div>
+    <div class="priority-step-item">
+      <span class="priority-badge-num">3</span>
+      <div>
+        <strong>Department Base Baseline</strong> (Third Priority — Department baseline scale e.g. Engineering ₹95,000)
+      </div>
+    </div>
+    <div class="priority-step-item">
+      <span class="priority-badge-num" style="background:#64748b;">4</span>
+      <div>
+        <strong>Company Default Rules</strong> (Default Fallback — Universal organization defaults)
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Department Baselines Engine Table -->
+<div class="card" style="margin-bottom:24px;">
+  <div class="card-header" style="flex-wrap:wrap; gap:12px;">
+    <div>
+      <h3>🏢 Department Base Salary Benchmarks & Higher-Scale Rules</h3>
+      <p class="text-muted text-sm">Higher Salary Engine: max(Individual Base, Category Benchmark, Department Baseline)</p>
+    </div>
+  </div>
+  <div class="card-body p-0">
+    <form method="POST">
+      <input type="hidden" name="action" value="save_dept_baselines">
+      <input type="hidden" name="tab" value="overrides">
+      <div class="table-responsive">
+        <table class="table">
+          <thead>
+            <tr>
+              <th>Department</th>
+              <th>Description & Scope</th>
+              <th>Minimum Department Base CTC (₹ / month)</th>
+              <th>Active Staff</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% set default_depts = [
+              ('Management', 'Executive Leadership, Admin & Directors', 150000),
+              ('Engineering', 'Software Engineering, Architecture & DevOps', 95000),
+              ('Finance', 'Financial Planning, Accounting & Audit', 75000),
+              ('Sales', 'Direct Sales, Accounts & Business Development', 70000),
+              ('Marketing', 'Brand Marketing, Growth & Communications', 65000),
+              ('HR', 'Talent Acquisition, People Operations & Relations', 60000),
+              ('Operations', 'Support, Logistics & Workplace Operations', 55000)
+            ] %}
+            {% for d_name, d_desc, d_min in default_depts %}
+              {% set staffCount = [] %}
+              {% for emp in employees if emp.department == d_name %}
+                {% if staffCount.append(1) %}{% endif %}
+              {% endfor %}
+              <tr>
+                <td>
+                  <div style="font-weight:700; color:var(--text); font-size:14.5px;">
+                    {{ d_name }}
+                  </div>
+                </td>
+                <td>
+                  <input type="text" class="form-input" value="{{ d_desc }}" style="max-width:340px;" />
+                </td>
+                <td>
+                  <div style="display:flex; align-items:center; gap:8px;">
+                    <span style="font-weight:700; color:var(--text-muted);">₹</span>
+                    <input type="number" class="form-input" value="{{ rules.get('department_baselines', {}).get(d_name, d_min) }}" min="1000" step="500" style="width:140px; font-weight:700;" />
+                  </div>
+                </td>
+                <td>
+                  <span class="badge badge-info">{{ staffCount | length }} Employees</span>
+                </td>
+                <td>
+                  <span class="badge badge-success">Active Engine</span>
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      <div style="padding: 20px; text-align:right; border-top:1px solid var(--border); background:var(--surface-secondary);">
+        <button type="submit" class="btn btn-primary">
+          💾 Save Department Salary Baselines
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- SECTION 5: Employee Category Profiles -->
+{% elif tab == 'types' %}
+{% set categories = [
+  ('full_time_senior', 'Full-Time Senior Staff', 95000),
+  ('full_time_junior', 'Full-Time Junior Staff', 45000),
+  ('management_exec', 'Executive & Management', 150000),
+  ('intern_trainee', 'Intern & Trainee', 25000),
+  ('contract_hourly', 'Contractor & Freelancer', 60000)
+] %}
+{% set selected_cat_id = request.args.get('type', 'full_time_senior') %}
+
+<div class="type-selector-bar">
+  <span style="font-size:13px; font-weight:var(--font-weight-extrabold); color:var(--text-muted); text-transform:uppercase; margin-right:6px;">Select Category Profile:</span>
+  {% for cat_id, cat_name, cat_base in categories %}
+    <a href="{{ url_for('payroll_settings', tab='types', type=cat_id) }}" class="type-chip {% if cat_id == selected_cat_id %}active{% endif %}">
+      {{ cat_name }}
+    </a>
+  {% endfor %}
+</div>
+
+<form method="POST">
+  <input type="hidden" name="action" value="save_category">
+  <input type="hidden" name="tab" value="types">
+  <input type="hidden" name="cat_id" value="{{ selected_cat_id }}">
+
+  {% set curr_cat = categories | selectattr(0, 'equalto', selected_cat_id) | first or categories[0] %}
+
+  <div class="settings-grid-2">
+    <div class="rule-group-card">
+      <div class="rule-group-title">
+        <span>📋 Category Profile Definition</span>
+        <span class="badge badge-info">{{ curr_cat[0] }}</span>
+      </div>
+      <div class="rule-group-subtitle">Define title, description and benchmark salary for this employee group</div>
+      <div class="form-group">
+        <label>Category Display Name <span class="req">*</span></label>
+        <input type="text" name="cat_name" class="form-input" value="{{ curr_cat[1] }}" required />
+      </div>
+      <div class="form-group">
+        <label>Description & Scope</label>
+        <input type="text" name="cat_desc" class="form-input" value="{{ curr_cat[1] }} Profile" />
+      </div>
+      <div class="form-group">
+        <label>Benchmark Base CTC (INR ₹) <span class="req">*</span></label>
+        <input type="number" name="cat_base" class="form-input" value="{{ curr_cat[2] }}" min="1000" step="500" required />
+      </div>
+    </div>
+
+    <div class="rule-group-card">
+      <div class="rule-group-title">
+        <span>💵 Component Splits for {{ curr_cat[1] }}</span>
+      </div>
+      <div class="rule-group-subtitle">Configure percentage splits and fixed monthly allowances</div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Basic Salary (% of Base)</label>
+          <input type="number" name="basic_pct" class="form-input" value="50" min="10" max="100" step="1" required />
+        </div>
+        <div class="form-group">
+          <label>HRA (% of Basic)</label>
+          <input type="number" name="hra_pct" class="form-input" value="40" min="0" max="100" step="1" required />
+        </div>
+      </div>
+      <div class="settings-grid-3">
+        <div class="form-group">
+          <label>Special Allowance (₹)</label>
+          <input type="number" name="special_allow" class="form-input" value="12000" min="0" step="500" />
+        </div>
+        <div class="form-group">
+          <label>Conveyance (₹)</label>
+          <input type="number" name="conveyance_allow" class="form-input" value="3000" min="0" step="500" />
+        </div>
+        <div class="form-group">
+          <label>Medical Allowance (₹)</label>
+          <input type="number" name="medical_allow" class="form-input" value="2500" min="0" step="500" />
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:14px; margin-top:24px; padding:20px; background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); margin-bottom:24px;">
+    <div>
+      <span style="font-weight:700; color:var(--text);">Updating Rules for:</span> <strong>{{ curr_cat[1] }}</strong>
+    </div>
+    <div style="display:flex; gap:12px; flex-wrap:wrap;">
+      <button type="submit" class="btn btn-primary">
+        💾 Save "{{ curr_cat[1] }}" Rules
+      </button>
+    </div>
+  </div>
+</form>
+
+<!-- Employee Category Assignments & Salary Mapping Table -->
+<div class="card">
+  <div class="card-header">
+    <h3>👥 Assign Employees to Category Profiles & Individual Base CTC</h3>
+    <p class="text-muted text-sm">Select which Category Profile each employee belongs to, configure individual base contract salaries, bank details, and PAN numbers.</p>
+  </div>
+  <div class="card-body p-0">
+    <form method="POST">
+      <input type="hidden" name="action" value="save_all_salaries">
+      <input type="hidden" name="tab" value="types">
+      <div class="table-responsive">
+        <table class="table">
+          <thead>
+            <tr>
+              <th>Employee & Department</th>
+              <th>Assigned Category Profile</th>
+              <th>Individual Base CTC (₹)</th>
+              <th>Dept Baseline (₹)</th>
+              <th>Effective Base Pay (Higher Engine)</th>
+              <th>Bank Name</th>
+              <th>Account No</th>
+              <th>IFSC Code</th>
+              <th>PAN Card #</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for emp in employees %}
+            {% set sal = salaries.get(emp.id) %}
+            {% set dept_baselines = {
+              'Management': 150000,
+              'Engineering': 95000,
+              'Finance': 75000,
+              'Sales': 70000,
+              'Marketing': 65000,
+              'HR': 60000,
+              'Operations': 55000
+            } %}
+            {% set dept_base = dept_baselines.get(emp.department, 0) %}
+            {% set ind_base = sal.base_ctc if sal else 50000 %}
+            {% set effective_base = [ind_base, dept_base] | max %}
+            {% set is_dept_higher = effective_base == dept_base and dept_base > ind_base %}
+            <tr>
+              <td>
+                <div class="emp-cell">
+                  <div class="avatar-sm">{{ emp.first_name[0] }}</div>
+                  <div>
+                    <div class="fw-600">{{ emp.full_name }}</div>
+                    <div class="text-muted text-sm">
+                      <span class="badge badge-info" style="font-size:10.5px; padding:2px 6px;">{{ emp.department or 'General' }}</span>
+                      {{ emp.position or 'Staff' }}
+                    </div>
+                  </div>
+                </div>
+                <input type="hidden" name="emp_id_{{ emp.id }}" value="{{ emp.id }}" />
+              </td>
+              <td>
+                <select name="emp_type_{{ emp.id }}" class="form-input" style="min-width:170px;">
+                  {% for cat_id, cat_name, cat_base in categories %}
+                    <option value="{{ cat_id }}" {% if sal and sal.category == cat_name %}selected{% elif cat_id == 'full_time_senior' %}selected{% endif %}>
+                      {{ cat_name }}
+                    </option>
+                  {% endfor %}
+                </select>
+              </td>
+              <td>
+                <input type="number" name="emp_base_{{ emp.id }}" class="form-input" value="{{ ind_base }}" min="1000" step="500" style="width:120px;" />
+              </td>
+              <td>
+                <span style="font-weight:600; color:var(--text);">{{ dept_base | format_inr }}</span>
+              </td>
+              <td>
+                <div style="font-weight:800; color:#059669; font-size:14.5px;">
+                  {{ effective_base | format_inr }}
+                </div>
+                {% if is_dept_higher %}
+                  <div style="font-size:10.5px; font-weight:700; color:#4338ca; background:#eef2ff; padding:2px 6px; border-radius:4px; margin-top:2px; display:inline-block;">
+                    ⚡ Elevated by {{ emp.department }} Baseline
+                  </div>
+                {% else %}
+                  <div style="font-size:10.5px; color:var(--text-muted); margin-top:2px;">
+                    Individual Contract Base
+                  </div>
+                {% endif %}
+              </td>
+              <td>
+                <input type="text" name="emp_bank_{{ emp.id }}" class="form-input" value="{{ sal.bank_name if sal else 'HDFC Bank Ltd.' }}" style="width:130px;" />
+              </td>
+              <td>
+                <input type="text" name="emp_acc_{{ emp.id }}" class="form-input" value="{{ sal.bank_account_no if sal else '••••••••4892' }}" style="width:120px;" />
+              </td>
+              <td>
+                <input type="text" name="emp_ifsc_{{ emp.id }}" class="form-input" value="{{ sal.bank_ifsc if sal else 'HDFC0001001' }}" style="width:110px;" />
+              </td>
+              <td>
+                <input type="text" name="emp_pan_{{ emp.id }}" class="form-input" value="{{ sal.pan_no if sal else 'ABCDE1234F' }}" style="width:110px;" />
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      <div style="padding: 20px; text-align:right; border-top:1px solid var(--border); background:var(--surface-secondary);">
+        <button type="submit" class="btn btn-primary">
+          💾 Save All Employee Category Mappings
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- SECTION 6: Test Simulation & Preview -->
+{% elif tab == 'simulation' %}
+{% set raw_sim_user = request.args.get('sim_user') %}
+{% set sim_user_id = (raw_sim_user | int) if raw_sim_user else (employees[0].id if employees else 2) %}
+{% set sim_user = employees | selectattr('id', 'equalto', sim_user_id) | first or (employees[0] if employees else None) %}
+
+<div class="settings-grid-2">
+  <div>
+    <div class="rule-group-card">
+      <div class="rule-group-title">
+        <span>📋 Active Payroll Rule Engine Summary</span>
+        <span class="badge badge-success">{{ rules.get('rule_status', 'ACTIVE') }}</span>
+      </div>
+      <div class="rule-group-subtitle">Overview of configured formulas applied during payment processing</div>
+
+      <div style="display:flex; flex-direction:column; gap:12px; font-size:13px;">
+        <div style="padding:10px 14px; background:var(--surface-secondary); border-radius:var(--radius-sm); border-left:4px solid #6366f1;">
+          <strong>Basic Salary:</strong> {{ rules.get('basic_pct', 50) }}% of Effective Base CTC
+        </div>
+        <div style="padding:10px 14px; background:var(--surface-secondary); border-radius:var(--radius-sm); border-left:4px solid #6366f1;">
+          <strong>HRA Component:</strong> {{ rules.get('hra_pct', 40) }}% of Basic Salary
+        </div>
+        <div style="padding:10px 14px; background:var(--surface-secondary); border-radius:var(--radius-sm); border-left:4px solid #059669;">
+          <strong>Provident Fund (PF):</strong> {{ rules.get('pf_pct', 6) }}% of Basic Salary
+        </div>
+        <div style="padding:10px 14px; background:var(--surface-secondary); border-radius:var(--radius-sm); border-left:4px solid #059669;">
+          <strong>Professional Tax (PT):</strong> Slab-Based (₹0 / ₹175 / ₹200)
+        </div>
+        <div style="padding:10px 14px; background:var(--surface-secondary); border-radius:var(--radius-sm); border-left:4px solid #dc2626;">
+          <strong>Loss of Pay (LOP):</strong> Monthly Salary ÷ Working Days × Unpaid Days
+        </div>
+        <div style="padding:10px 14px; background:var(--surface-secondary); border-radius:var(--radius-sm); border-left:4px solid #7c3aed;">
+          <strong>Overtime (OT):</strong> Hourly Rate × {{ rules.get('ot_multiplier', 1.5) }}x (&gt;8h daily / &gt;40h weekly)
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div>
+    <div class="rule-group-card">
+      <div class="rule-group-title">
+        <span>🧪 Interactive "Test Payroll" Dry-Run Simulator</span>
+      </div>
+      <div class="rule-group-subtitle">Select an employee to preview payroll calculations before activating rules</div>
+
+      <div class="form-group" style="margin-bottom:16px;">
+        <label style="font-weight:700;">Select Sample Employee for Test Simulation:</label>
+        <select class="form-input" onchange="window.location.href='{{ url_for('payroll_settings', tab='simulation') }}&sim_user=' + this.value">
+          {% for emp in employees %}
+            <option value="{{ emp.id }}" {% if emp.id == sim_user_id %}selected{% endif %}>
+              {{ emp.full_name }} ({{ emp.department or 'Staff' }}) — {{ emp.position or '' }}
+            </option>
+          {% endfor %}
+        </select>
+      </div>
+
+      {% if sim_user %}
+        {% set sal = salaries.get(sim_user.id) %}
+        {% set base_ctc = sal.base_ctc if sal else 50000 %}
+        {% set basic = (base_ctc * 0.5) | round %}
+        {% set hra = (basic * 0.4) | round %}
+        {% set conv = 2000 %}
+        {% set med = 1500 %}
+        {% set special = [0, base_ctc - basic - hra - conv - med] | max %}
+        {% set gross = basic + hra + special + conv + med %}
+        {% set pf = (basic * 0.06) | round %}
+        {% set pt = 200 %}
+        {% set tds = (gross * 0.10) | round %}
+        {% set total_ded = pf + pt + tds %}
+        {% set net = gross - total_ded %}
+
+        <div class="simulation-banner">
+          <span>⚠️</span>
+          <span>SIMULATION MODE — DRAFT CALCULATED PAYROLL (Not a Saved Payment)</span>
+        </div>
+
+        <div class="card" style="border:1px solid var(--border-dark); background:var(--surface);">
+          <div class="card-header" style="padding:12px 16px; background:var(--surface-secondary);">
+            <div style="font-weight:700;">Simulated Payslip: {{ sim_user.full_name }}</div>
+            <div class="text-sm text-muted">{{ sim_user.department or 'General' }} Department • Standard Contract</div>
+          </div>
+          <div class="card-body" style="padding:16px; font-size:13px;">
+            <div style="display:flex; justify-content:space-between; margin-bottom:6px;">
+              <span>Base CTC Scale:</span>
+              <strong>{{ base_ctc | format_inr }}</strong>
+            </div>
+            <div style="display:flex; justify-content:space-between; margin-bottom:6px;">
+              <span>Basic Salary (50%):</span>
+              <strong>{{ basic | format_inr }}</strong>
+            </div>
+            <div style="display:flex; justify-content:space-between; margin-bottom:6px;">
+              <span>House Rent Allowance (HRA):</span>
+              <strong>{{ hra | format_inr }}</strong>
+            </div>
+            <div style="display:flex; justify-content:space-between; margin-bottom:6px;">
+              <span>Allowances &amp; Overtime:</span>
+              <strong>{{ (special + conv + med) | format_inr }}</strong>
+            </div>
+            <div style="display:flex; justify-content:space-between; padding-top:6px; border-top:1px solid var(--border); font-weight:700; color:#059669;">
+              <span>Total Gross Earnings:</span>
+              <span>{{ gross | format_inr }}</span>
+            </div>
+
+            <div style="margin-top:14px; padding-top:10px; border-top:1.5px dashed var(--border);">
+              <div style="display:flex; justify-content:space-between; margin-bottom:6px;">
+                <span>Provident Fund (PF):</span>
+                <span class="text-danger">-{{ pf | format_inr }}</span>
+              </div>
+              <div style="display:flex; justify-content:space-between; margin-bottom:6px;">
+                <span>Professional Tax (PT):</span>
+                <span class="text-danger">-{{ pt | format_inr }}</span>
+              </div>
+              <div style="display:flex; justify-content:space-between; margin-bottom:6px;">
+                <span>Income Tax (TDS):</span>
+                <span class="text-danger">-{{ tds | format_inr }}</span>
+              </div>
+              <div style="display:flex; justify-content:space-between; padding-top:6px; border-top:1px solid var(--border); font-weight:800; font-size:15px; color:var(--primary);">
+                <span>Calculated Net Pay:</span>
+                <span>{{ net | format_inr }}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      {% endif %}
+    </div>
+  </div>
+</div>
+
+<!-- SECTION 7: Payslip Branding & Entity -->
+{% elif tab == 'branding' %}
+{% set company = rules.get('company', {}) %}
+<form method="POST">
+  <input type="hidden" name="action" value="save_branding">
+  <input type="hidden" name="tab" value="branding">
+
+  <div class="rule-group-card" style="max-width:750px; margin:0 auto;">
+    <div class="rule-group-title">
+      <span>🏢 Legal Entity &amp; Payslip Certificate Info</span>
+    </div>
+    <div class="rule-group-subtitle">This information appears on all generated Tax Invoices &amp; Salary Payslips</div>
+
+    <div class="form-group">
+      <label>Company Legal Name <span class="req">*</span></label>
+      <input type="text" name="company_name" class="form-input" value="{{ company.get('company_name', 'AttendEase Technologies Pvt. Ltd.') }}" required />
+    </div>
+
+    <div class="form-group">
+      <label>Registered Corporate Address <span class="req">*</span></label>
+      <input type="text" name="address" class="form-input" value="{{ company.get('address', 'Cyber City, Sector 24, DLF Phase 3, Gurugram, HR 122002') }}" required />
+    </div>
+
+    <div class="form-row">
+      <div class="form-group">
+        <label>GSTIN / Tax ID Number <span class="req">*</span></label>
+        <input type="text" name="gstin" class="form-input" value="{{ company.get('gstin', '07AABCA1234F1Z8') }}" required />
+      </div>
+      <div class="form-group">
+        <label>Payroll Contact Email <span class="req">*</span></label>
+        <input type="email" name="email" class="form-input" value="{{ company.get('email', 'contact@attendease.com') }}" required />
+      </div>
+    </div>
+
+    <div class="form-group">
+      <label>Authorized Signatory Title</label>
+      <input type="text" name="signatory_title" class="form-input" value="{{ company.get('signatory_title', 'Finance & Payroll Department') }}" required />
+    </div>
+
+    <div class="form-group">
+      <label>Payslip Certificate Disclaimer Note</label>
+      <textarea name="disclaimer" class="form-input" rows="3" style="resize:vertical;">{{ company.get('disclaimer', 'This is a computer-generated tax invoice and salary certificate. No physical signature is required under IT rules.') }}</textarea>
+    </div>
+
+    <div style="text-align:right; margin-top:20px;">
+      <button type="submit" class="btn btn-primary">
+        💾 Save Entity Info &amp; Payslip Branding
+      </button>
+    </div>
+  </div>
+</form>
+{% endif %}
+
+{% endblock %}
