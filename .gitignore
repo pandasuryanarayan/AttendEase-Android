@@ -1,13 +1,51 @@
-# Flask App
+# Built application files
+*.apk
+*.aar
+*.aab
+
+# Gradle & Kotlin build caches
+.gradle/
+build/
+*/build/
+.build-outputs/
+.kotlin/
+
+# Android Studio & IntelliJ IDEA
+.idea/
+*.iml
+.navigation/
+captures/
+.externalNativeBuild/
+.cxx/
+
+# Local configuration & environment
+local.properties
+.env
+.env.local
+
+# Java class & log files
+*.class
+hs_err_pid*
+replay_pid*
+
+# Keystores & sensitive signing keys (keep debug.keystore if tracking, ignore release keys)
+*.jks
+release.keystore
+*.key
+
+# OS generated files
+.DS_Store
+Thumbs.db
+
+# Reference implementations
+# Flask
 flask-app/venv/
 flask-app/__pycache__/
 flask-app/instance/
 *.db
 *.pyc
 
-# React App
+# React
 react-app/node_modules/
 react-app/dist/
-
-# System / OS
-.DS_Store
+react-app/.vite/
