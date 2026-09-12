@@ -1,3 +1,5 @@
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
@@ -19,6 +21,13 @@ android {
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
+    val releaseProperties = Properties().apply {
+        val propertiesFile = rootProject.file("local.properties")
+        if (propertiesFile.exists()) {
+            propertiesFile.inputStream().use { load(it) }
+        }
+    }
+
     signingConfigs {
         getByName("debug") {
             val keyFile = file("${rootDir}/debug.keystore")
@@ -29,10 +38,20 @@ android {
                 keyPassword = "android"
             }
         }
+        create("release") {
+            storeFile = rootProject.file("release.keystore")
+            storePassword = releaseProperties.getProperty("release.store.password")
+                ?: error("Missing release.store.password in local.properties")
+            keyAlias = releaseProperties.getProperty("release.key.alias")
+                ?: error("Missing release.key.alias in local.properties")
+            keyPassword = releaseProperties.getProperty("release.key.password")
+                ?: error("Missing release.key.password in local.properties")
+        }
     }
 
     buildTypes {
         release {
+            signingConfig = signingConfigs.getByName("release")
             isMinifyEnabled = false
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
